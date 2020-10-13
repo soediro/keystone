@@ -19,7 +19,7 @@ import { PrismaAdapter } from '@keystone-next/adapter-prisma-legacy';
 import { initConfig, createSystem, createExpressServer } from '@keystone-next/keystone';
 import type { KeystoneConfig, BaseKeystone, KeystoneContext } from '@keystone-next/types';
 
-export type AdapterName = 'mongoose' | 'knex' | 'prisma_postgresql';
+export type AdapterName = 'mongoose' | 'knex' | 'prisma_postgresql' | 'prisma_sqlite';
 
 const argGenerator = {
   mongoose: getMongoMemoryServerConfig,
@@ -35,6 +35,22 @@ const argGenerator = {
     dropDatabase: true,
     url: process.env.DATABASE_URL || '',
     provider: 'postgresql',
+    // Put the generated client at a unique path
+    getPrismaPath: ({ prismaSchema }: { prismaSchema: string }) =>
+      path.join(
+        '.api-test-prisma-clients',
+        crypto.createHash('sha256').update(prismaSchema).digest('hex')
+      ),
+    // Slice down to the hash make a valid postgres schema name
+    getDbSchemaName: ({ prismaSchema }: { prismaSchema: string }) =>
+      crypto.createHash('sha256').update(prismaSchema).digest('hex').slice(0, 16),
+    // Turn this on if you need verbose debug info
+    enableLogging: false,
+  }),
+  prisma_sqlite: () => ({
+    dropDatabase: true,
+    url: process.env.DATABASE_URL || '',
+    provider: 'sqlite',
     // Put the generated client at a unique path
     getPrismaPath: ({ prismaSchema }: { prismaSchema: string }) =>
       path.join(
@@ -63,6 +79,9 @@ async function setupFromConfig({
     const adapterArgs = await argGenerator[adapterName]();
     config.db = { adapter: adapterName, url: adapterArgs.mongoUri, mongooseOptions: adapterArgs };
   } else if (adapterName === 'prisma_postgresql') {
+    const adapterArgs = await argGenerator[adapterName]();
+    config.db = { adapter: adapterName, ...adapterArgs };
+  } else if (adapterName === 'prisma_sqlite') {
     const adapterArgs = await argGenerator[adapterName]();
     config.db = { adapter: adapterName, ...adapterArgs };
   }
@@ -99,6 +118,7 @@ async function setupServer({
     mongoose: MongooseAdapter,
     knex: KnexAdapter,
     prisma_postgresql: PrismaAdapter,
+    prisma_sqlite: PrismaAdapter,
   }[adapterName];
 
   const keystone = new Keystone({
@@ -268,6 +288,12 @@ function multiAdapterRunners(only = process.env.TEST_ADAPTER) {
       runner: _keystoneRunner('prisma_postgresql', () => {}),
       adapterName: 'prisma_postgresql',
       before: _before('prisma_postgresql'),
+      after: _after(() => {}),
+    },
+    {
+      runner: _keystoneRunner('prisma_sqlite', () => {}),
+      adapterName: 'prisma_sqlite',
+      before: _before('prisma_sqlite'),
       after: _after(() => {}),
     },
   ].filter(a => typeof only === 'undefined' || a.adapterName === only);

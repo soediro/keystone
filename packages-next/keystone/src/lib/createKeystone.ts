@@ -34,6 +34,13 @@ export function createKeystone(
       migrationMode,
       prismaClient,
       ...db,
+      provider: 'postgresql',
+    });
+  } else if (db.adapter === 'prisma_sqlite') {
+    adapter = new PrismaAdapter({
+      getPrismaPath: () => path.join(dotKeystonePath, 'prisma'),
+      ...db,
+      provider: 'sqlite',
     });
   }
   // @ts-ignore The @types/keystonejs__keystone package has the wrong type for KeystoneOptions

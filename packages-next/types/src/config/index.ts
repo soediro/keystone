@@ -65,6 +65,12 @@ export type DatabaseConfig = DatabaseCommon &
         getPrismaPath?: (arg: { prismaSchema: any }) => string;
         getDbSchemaName?: (arg: { prismaSchema: any }) => string;
       }
+    | {
+        adapter: 'prisma_sqlite';
+        enableLogging?: boolean;
+        getPrismaPath?: (arg: { prismaSchema: any }) => string;
+        getDbSchemaName?: (arg: { prismaSchema: any }) => string;
+      }
     | { adapter: 'knex'; dropDatabase?: boolean; schemaName?: string }
     | { adapter: 'mongoose'; mongooseOptions?: { mongoUri?: string } & ConnectOptions }
   );

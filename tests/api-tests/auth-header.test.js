@@ -1,5 +1,5 @@
 import Iron from '@hapi/iron';
-const { text, timestamp, password } = require('@keystone-next/fields');
+const { text, password } = require('@keystone-next/fields');
 const { createSchema, list } = require('@keystone-next/keystone/schema');
 const { statelessSessions, withItemData } = require('@keystone-next/keystone/session');
 const { createAuth } = require('@keystone-next/auth');
@@ -43,7 +43,6 @@ function setupKeystone(adapterName) {
           Post: list({
             fields: {
               title: text(),
-              postedAt: timestamp(),
             },
           }),
           User: list({
