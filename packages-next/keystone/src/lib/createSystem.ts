@@ -7,9 +7,11 @@ import { createKeystone } from './createKeystone';
 export function createSystem(config: KeystoneConfig, dotKeystonePath: string, script: string) {
   const keystone = createKeystone(config, dotKeystonePath, script);
 
-  const graphQLSchema = createGraphQLSchema(config, keystone);
+  const graphQLSchema = createGraphQLSchema(config, keystone, 'public');
 
-  const createContext = makeCreateContext({ keystone, graphQLSchema });
+  const internalSchema = createGraphQLSchema(config, keystone, 'internal');
+
+  const createContext = makeCreateContext({ keystone, graphQLSchema, internalSchema });
 
   return { keystone, graphQLSchema, createContext };
 }

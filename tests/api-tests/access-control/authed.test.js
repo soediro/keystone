@@ -37,10 +37,11 @@ const expectNamedArray = (data, errors, name, values) => {
 
 multiAdapterRunners().map(({ before, after, adapterName }) =>
   describe(`Adapter: ${adapterName}`, () => {
-    let keystone, items, user;
+    let keystone, items, user, context;
     beforeAll(async () => {
       const _before = await before(setupKeystone);
       keystone = _before.keystone;
+      context = _before.context;
 
       // ensure every list has at least some data
       const initialData = listAccessVariations.reduce(
@@ -54,21 +55,20 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
       );
 
       items = {};
-      const context = keystone.createContext({ schemaName: 'internal' });
       for (const [listKey, _items] of Object.entries(initialData)) {
         items[listKey] = await createItems({
           keystone,
           listKey,
           items: _items.map(x => ({ data: x })),
           returnFields: 'id, name',
-          context,
+          context: context.sudo(),
         });
       }
       user = await createItem({
         listKey: 'User',
         item: { name: 'test', yesRead: 'yes', noRead: 'no' },
         returnFields: 'id name yesRead noRead',
-        context,
+        context: context.sudo(),
       });
     });
     afterAll(async () => {
@@ -84,12 +84,12 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`allowed: ${JSON.stringify(access)}`, async () => {
                 const createMutationName = `create${nameFn[mode](access)}`;
                 const query = `mutation { ${createMutationName}(data: { name: "bar" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[createMutationName]).not.toBe(null);
                 expect(data[createMutationName].id).not.toBe(null);
                 await deleteItem({
-                  keystone,
+                  context: context.sudo(),
                   listKey: nameFn[mode](access),
                   itemId: data[createMutationName].id,
                 });
@@ -108,12 +108,11 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const createMutationName = `create${nameFn[mode](listAccess)}`;
                 const fieldName = getFieldName(access);
                 const query = `mutation { ${createMutationName}(data: { ${fieldName}: "bar" }) { id ${fieldName} } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[createMutationName]).not.toBe(null);
                 expect(data[createMutationName].id).not.toBe(null);
@@ -123,7 +122,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   expect(data[createMutationName][fieldName]).toBe(undefined);
                 }
                 await deleteItem({
-                  keystone,
+                  context: context.sudo(),
                   listKey: nameFn[mode](listAccess),
                   itemId: data[createMutationName].id,
                 });
@@ -142,17 +141,16 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const createMutationName = `create${nameFn[mode](listAccess)}`;
                 const fieldName = getFieldName(access);
                 const query = `mutation { ${createMutationName}(data: { ${fieldName}: "bar" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[createMutationName]).not.toBe(null);
                 expect(data[createMutationName].id).not.toBe(null);
                 await deleteItem({
-                  keystone,
+                  context: context.sudo(),
                   listKey: nameFn[mode](listAccess),
                   itemId: data[createMutationName].id,
                 });
@@ -164,17 +162,21 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
 
     describe('read', () => {
       test('authed user', async () => {
-        const query = `query { authenticatedUser { id yesRead noRead } }`;
-        const context = keystone.createContext({ authentication: { item: user, listKey: 'User' } });
-        const { data, errors } = await keystone.executeGraphQL({ context, query });
-        expect(data.authenticatedUser).not.toBe(null);
-        expect(data.authenticatedUser.id).toEqual(user.id);
-        expect(data.authenticatedUser.yesRead).toEqual(user.yesRead);
-        expect(data.authenticatedUser.noRead).toEqual(null);
+        const query = `query { authenticatedItem { id yesRead noRead } }`;
+        const _context = context.exitSudo().withSession({
+          itemId: user.id,
+          listKey: 'User',
+          data: user,
+        });
+        const { data, errors } = await _context.executeGraphQL({ query });
+        expect(data.authenticatedItem).not.toBe(null);
+        expect(data.authenticatedItem.id).toEqual(user.id);
+        expect(data.authenticatedItem.yesRead).toEqual(user.yesRead);
+        expect(data.authenticatedItem.noRead).toEqual(null);
         expect(errors).toHaveLength(1);
         expect(errors[0].name).toEqual('GraphQLError');
         expect(errors[0].message).toEqual('You do not have access to this resource');
-        expect(errors[0].path).toEqual(['authenticatedUser', 'noRead']);
+        expect(errors[0].path).toEqual(['authenticatedItem', 'noRead']);
       });
 
       ['imperative', 'declarative'].forEach(mode => {
@@ -185,7 +187,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`'all' allowed: ${JSON.stringify(access)}`, async () => {
                 const allQueryName = `all${nameFn[mode](access)}s`;
                 const query = `query { ${allQueryName} { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 if (mode === 'imperative') {
                   expect(data[allQueryName]).toHaveLength(2);
@@ -197,7 +199,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`meta allowed: ${JSON.stringify(access)}`, async () => {
                 const metaName = `_all${nameFn[mode](access)}sMeta`;
                 const query = `query { ${metaName} { count } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 if (mode === 'imperative') {
                   expect(data[metaName].count).toEqual(2);
@@ -210,7 +212,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const singleQueryName = nameFn[mode](access);
                 const validId = items[singleQueryName].find(({ name }) => name === 'Hello').id;
                 const query = `query { ${singleQueryName}(where: { id: "${validId}" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[singleQueryName]).not.toBe(null);
                 expect(data[singleQueryName].id).toEqual(validId);
@@ -220,7 +222,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const singleQueryName = nameFn[mode](access);
                 const invalidId = items[singleQueryName].find(({ name }) => name !== 'Hello').id;
                 const query = `query { ${singleQueryName}(where: { id: "${invalidId}" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 if (mode === 'imperative') {
                   // Imperative should work
                   expect(errors).toBe(undefined);
@@ -235,14 +237,14 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`single not existing: ${JSON.stringify(access)}`, async () => {
                 const singleQueryName = nameFn[mode](access);
                 const query = `query { ${singleQueryName}(where: { id: "${FAKE_ID[adapterName]}" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expectNoAccess(data, errors, singleQueryName);
               });
 
               test(`multiple not existing: ${JSON.stringify(access)}`, async () => {
                 const allQueryName = `all${nameFn[mode](access)}s`;
                 const query = `query { ${allQueryName}(where: { id_in: ["${FAKE_ID[adapterName]}", "${FAKE_ID_2[adapterName]}"] }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[allQueryName]).toHaveLength(0);
               });
@@ -260,19 +262,18 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const listKey = nameFn[mode](listAccess);
                 const item = items[listKey][0];
                 const fieldName = getFieldName(access);
                 const singleQueryName = listKey;
                 await updateItem({
-                  context: keystone.createContext({ schemaName: 'internal' }),
+                  context: context.sudo(),
                   listKey,
                   item: { id: item.id, data: { [fieldName]: 'hello' } },
                 });
                 const query = `query { ${singleQueryName}(where: { id: "${item.id}" }) { id ${fieldName} } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[singleQueryName]).not.toBe(null);
                 expect(data[singleQueryName].id).not.toBe(null);
@@ -284,19 +285,18 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const listKey = nameFn[mode](listAccess);
                 const item = items[listKey][0];
                 const fieldName = getFieldName(access);
                 const allQueryName = `all${listKey}s`;
                 await updateItem({
-                  context: keystone.createContext({ schemaName: 'internal' }),
+                  context: context.sudo(),
                   listKey,
                   item: { id: item.id, data: { [fieldName]: 'hello' } },
                 });
                 const query = `query { ${allQueryName} { id ${fieldName} } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[allQueryName]).not.toBe(null);
                 expect(data[allQueryName]).toHaveLength(2);
@@ -323,7 +323,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`denies missing: ${JSON.stringify(access)}`, async () => {
                 const updateMutationName = `update${nameFn[mode](access)}`;
                 const query = `mutation { ${updateMutationName}(id: "${FAKE_ID[adapterName]}", data: { name: "bar" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expectNoAccess(data, errors, updateMutationName);
               });
 
@@ -332,14 +332,14 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const singleQueryName = nameFn[mode](access);
                 const invalidId = items[singleQueryName].find(({ name }) => name !== 'Hello').id;
                 const query = `mutation { ${updateMutationName}(id: "${invalidId}", data: { name: "bar" }) { id name } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 if (mode === 'imperative') {
                   expect(errors).toBe(undefined);
                   expect(data[updateMutationName]).not.toBe(null);
                   expect(data[updateMutationName].id).toEqual(invalidId);
                   expect(data[updateMutationName].name).toEqual('bar');
                   // Reset data
-                  await keystone.executeGraphQL({
+                  await context.executeGraphQL({
                     query: `mutation { ${updateMutationName}(id: "${invalidId}", data: { name: "Hello" }) { id name } }`,
                   });
                 } else {
@@ -352,13 +352,13 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const singleQueryName = nameFn[mode](access);
                 const validId = items[singleQueryName].find(({ name }) => name === 'Hello').id;
                 const query = `mutation { ${updateMutationName}(id: "${validId}", data: { name: "bar" }) { id name } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[updateMutationName]).not.toBe(null);
                 expect(data[updateMutationName].id).toEqual(validId);
                 expect(data[updateMutationName].name).toEqual('bar');
                 // Reset data
-                await keystone.executeGraphQL({
+                await context.executeGraphQL({
                   query: `mutation { ${updateMutationName}(id: "${validId}", data: { name: "Hello" }) { id name } }`,
                 });
               });
@@ -376,14 +376,13 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const listKey = nameFn[mode](listAccess);
                 const item = items[listKey][0];
                 const updateMutationName = `update${listKey}`;
                 const fieldName = getFieldName(access);
                 const query = `mutation { ${updateMutationName}(id: "${item.id}", data: { ${fieldName}: "bar" }) { id ${fieldName} } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[updateMutationName]).not.toBe(null);
                 expect(data[updateMutationName].id).not.toBe(null);
@@ -407,14 +406,13 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                   read: true,
                   update: true,
                   delete: true,
-                  auth: false,
                 };
                 const listKey = nameFn[mode](listAccess);
                 const item = items[listKey][0];
                 const updateMutationName = `update${listKey}`;
                 const fieldName = getFieldName(access);
                 const query = `mutation { ${updateMutationName}(id: "${item.id}", data: { ${fieldName}: "bar" }) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[updateMutationName]).not.toBe(null);
                 expect(data[updateMutationName].id).not.toBe(null);
@@ -432,16 +430,15 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
             .forEach(access => {
               const create = async item =>
                 createItem({
-                  keystone,
                   listKey: nameFn[mode](access),
                   item,
-                  context: keystone.createContext({ schemaName: 'internal' }),
+                  context: context.sudo(),
                 });
               test(`single allowed: ${JSON.stringify(access)}`, async () => {
                 const { id: validId } = await create({ name: 'Hello' });
                 const deleteMutationName = `delete${nameFn[mode](access)}`;
                 const query = `mutation { ${deleteMutationName}(id: "${validId}") { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expect(errors).toBe(undefined);
                 expect(data[deleteMutationName]).not.toBe(null);
                 expect(data[deleteMutationName].id).toEqual(validId);
@@ -451,7 +448,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const { id: invalidId } = await create({ name: 'hi' });
                 const deleteMutationName = `delete${nameFn[mode](access)}`;
                 const query = `mutation { ${deleteMutationName}(id: "${invalidId}") { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 if (mode === 'imperative') {
                   expect(errors).toBe(undefined);
                   expect(data[deleteMutationName]).not.toBe(null);
@@ -464,7 +461,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`single denies missing: ${JSON.stringify(access)}`, async () => {
                 const deleteMutationName = `delete${nameFn[mode](access)}`;
                 const query = `mutation { ${deleteMutationName}(id: "${FAKE_ID[adapterName]}") { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expectNoAccess(data, errors, deleteMutationName);
               });
 
@@ -473,7 +470,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const { id: validId2 } = await create({ name: 'Hello' });
                 const multiDeleteMutationName = `delete${nameFn[mode](access)}s`;
                 const query = `mutation { ${multiDeleteMutationName}(ids: ["${validId1}", "${validId2}"]) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expectNamedArray(data, errors, multiDeleteMutationName, [validId1, validId2]);
               });
 
@@ -482,7 +479,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const { id: validId2 } = await create({ name: 'hi' });
                 const multiDeleteMutationName = `delete${nameFn[mode](access)}s`;
                 const query = `mutation { ${multiDeleteMutationName}(ids: ["${validId1}", "${validId2}"]) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 if (mode === 'imperative') {
                   expectNamedArray(data, errors, multiDeleteMutationName, [validId1, validId2]);
                 } else {
@@ -495,7 +492,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
                 const { id: validId2 } = await create({ name: 'hi' });
                 const multiDeleteMutationName = `delete${nameFn[mode](access)}s`;
                 const query = `mutation { ${multiDeleteMutationName}(ids: ["${validId1}", "${validId2}"]) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 if (mode === 'imperative') {
                   expectNamedArray(data, errors, multiDeleteMutationName, [validId1, validId2]);
                 } else {
@@ -506,7 +503,7 @@ multiAdapterRunners().map(({ before, after, adapterName }) =>
               test(`multi denies missing: ${JSON.stringify(access)}`, async () => {
                 const multiDeleteMutationName = `delete${nameFn[mode](access)}s`;
                 const query = `mutation { ${multiDeleteMutationName}(ids: ["${FAKE_ID[adapterName]}", "${FAKE_ID_2[adapterName]}"]) { id } }`;
-                const { data, errors } = await keystone.executeGraphQL({ query });
+                const { data, errors } = await context.exitSudo().executeGraphQL({ query });
                 expectNamedArray(data, errors, multiDeleteMutationName, []);
               });
             });

@@ -43,6 +43,7 @@ export function itemAPIForList(
   const listKey = list.key;
   return {
     findOne({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.findOne) return;
       const args = getArgs.findOne(rawArgs) as { where: { id: string } };
       if (resolveFields) {
         return getItem({ listKey, context, returnFields: resolveFields, itemId: args.where.id });
@@ -51,6 +52,7 @@ export function itemAPIForList(
       }
     },
     findMany({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.findMany) return;
       const args = getArgs.findMany(rawArgs);
       if (resolveFields) {
         return getItems({ listKey, context, returnFields: resolveFields, ...args });
@@ -59,10 +61,12 @@ export function itemAPIForList(
       }
     },
     async count(rawArgs) {
+      if (!getArgs.count) return 0;
       const args = getArgs.count(rawArgs);
       return (await list.listQueryMeta(args, context)).getCount();
     },
     createOne({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.createOne) return;
       const { data } = getArgs.createOne(rawArgs);
       if (resolveFields) {
         return createItem({ listKey, context, returnFields: resolveFields, item: data });
@@ -71,6 +75,7 @@ export function itemAPIForList(
       }
     },
     createMany({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.createMany) return;
       const { data } = getArgs.createMany(rawArgs);
       if (resolveFields) {
         return createItems({ listKey, context, returnFields: resolveFields, items: data });
@@ -79,6 +84,7 @@ export function itemAPIForList(
       }
     },
     updateOne({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.updateOne) return;
       const { id, data } = getArgs.updateOne(rawArgs);
       if (resolveFields) {
         return updateItem({ listKey, context, returnFields: resolveFields, item: { id, data } });
@@ -87,6 +93,7 @@ export function itemAPIForList(
       }
     },
     updateMany({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.updateMany) return;
       const { data } = getArgs.updateMany(rawArgs);
       if (resolveFields) {
         return updateItems({ listKey, context, returnFields: resolveFields, items: data });
@@ -95,6 +102,7 @@ export function itemAPIForList(
       }
     },
     deleteOne({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.deleteOne) return;
       const { id } = getArgs.deleteOne(rawArgs);
       if (resolveFields) {
         return deleteItem({ listKey, context, returnFields: resolveFields, itemId: id });
@@ -103,6 +111,7 @@ export function itemAPIForList(
       }
     },
     deleteMany({ resolveFields = 'id', ...rawArgs }) {
+      if (!getArgs.deleteMany) return;
       const { ids } = getArgs.deleteMany(rawArgs);
       if (resolveFields) {
         return deleteItems({ listKey, context, returnFields: resolveFields, items: ids });
