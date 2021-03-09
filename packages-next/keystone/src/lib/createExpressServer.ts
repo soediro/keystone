@@ -27,6 +27,8 @@ const addApolloServer = ({
     apolloConfig,
   });
   server.use(graphqlUploadExpress());
+  // FIXME: Support custom API path via config.graphql.path.
+  // Note: Core keystone uses '/admin/api' as the default.
   apolloServer.applyMiddleware({ app: server, path: '/api/graphql', cors: false });
 };
 

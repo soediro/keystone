@@ -13,28 +13,26 @@ export const createApolloServerMicro = ({
   graphQLSchema,
   createContext,
   sessionStrategy,
+  apolloConfig,
   connectionPromise,
 }: {
   graphQLSchema: GraphQLSchema;
   createContext: CreateContext;
   sessionStrategy?: SessionStrategy<any>;
+  apolloConfig?: Config;
   connectionPromise: Promise<any>;
 }) => {
-  return new ApolloServerMicro({
-    uploads: false,
-    schema: graphQLSchema,
-    playground: { settings: { 'request.credentials': 'same-origin' } },
-    formatError,
-    context: async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) => {
-      await connectionPromise;
-      return createContext({
-        sessionContext: sessionStrategy
-          ? await createSessionContext(sessionStrategy, req, res, createContext)
-          : undefined,
-        req,
-      });
-    },
-  });
+  const context = async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) => {
+    await connectionPromise;
+    return createContext({
+      sessionContext: sessionStrategy
+        ? await createSessionContext(sessionStrategy, req, res, createContext)
+        : undefined,
+      req,
+    });
+  };
+  const serverConfig = _createApolloServerConfig({ graphQLSchema, apolloConfig });
+  return new ApolloServerMicro({ ...serverConfig, context });
 };
 
 export const createApolloServerExpress = ({
@@ -48,6 +46,24 @@ export const createApolloServerExpress = ({
   sessionStrategy?: SessionStrategy<any>;
   apolloConfig?: Config;
 }) => {
+  const context = async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) =>
+    createContext({
+      sessionContext: sessionStrategy
+        ? await createSessionContext(sessionStrategy, req, res, createContext)
+        : undefined,
+      req,
+    });
+  const serverConfig = _createApolloServerConfig({ graphQLSchema, apolloConfig });
+  return new ApolloServerExpress({ ...serverConfig, context });
+};
+
+const _createApolloServerConfig = ({
+  graphQLSchema,
+  apolloConfig,
+}: {
+  graphQLSchema: GraphQLSchema;
+  apolloConfig?: Config;
+}) => {
   // Playground config
   const pp = apolloConfig?.playground;
   let playground: Config['playground'];
@@ -59,18 +75,11 @@ export const createApolloServerExpress = ({
   } else {
     playground = { ...pp, settings: { ...settings, ...pp.settings } };
   }
-  return new ApolloServerExpress({
+
+  return {
     uploads: false,
     schema: graphQLSchema,
-
     formatError, // TODO: this needs to be discussed
-    context: async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) =>
-      createContext({
-        sessionContext: sessionStrategy
-          ? await createSessionContext(sessionStrategy, req, res, createContext)
-          : undefined,
-        req,
-      }),
     // FIXME: support for apollo studio tracing
     // ...(process.env.ENGINE_API_KEY || process.env.APOLLO_KEY
     //   ? { tracing: true }
@@ -84,10 +93,8 @@ export const createApolloServerExpress = ({
     ...apolloConfig,
     // Carefully inject the playground
     playground,
-  });
-  // FIXME: Support custom API path via config.graphql.path.
-  // Note: Core keystone uses '/admin/api' as the default.
-  // FIXME: Support for file handling configuration
-  // maxFileSize: 200 * 1024 * 1024,
-  // maxFiles: 5,
+    // FIXME: Support for file handling configuration
+    // maxFileSize: 200 * 1024 * 1024,
+    // maxFiles: 5,
+  };
 };
