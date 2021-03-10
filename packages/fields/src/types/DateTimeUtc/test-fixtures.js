@@ -59,7 +59,7 @@ export const filterTests = withKeystone => {
       match(
         keystone,
         undefined,
-        adapterName === 'mongoose' || adapterName === 'prisma_sqlite'
+        adapterName === 'mongoose'
           ? [
               { name: 'person7', lastOnline: null },
               { name: 'person6', lastOnline: null },
