@@ -1,5 +1,11 @@
 # @keystone-next/types
 
+## 14.1.0
+
+### Minor Changes
+
+- [#5087](https://github.com/keystonejs/keystone/pull/5087) [`56e5fe10b`](https://github.com/keystonejs/keystone/commit/56e5fe10bc89877be7d7e3013e53012b4d82b648) Thanks [@mitchellhamilton](https://github.com/mitchellhamilton)! - Added `MigrationMode` type
+
 ## 14.0.1
 
 ### Patch Changes

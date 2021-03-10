@@ -1,5 +1,15 @@
 # @keystone-next/example-todo
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`56e5fe10b`](https://github.com/keystonejs/keystone/commit/56e5fe10bc89877be7d7e3013e53012b4d82b648)]:
+  - @keystone-next/keystone@13.0.0
+  - @keystone-next/admin-ui@12.0.0
+  - @keystone-next/auth@18.0.0
+  - @keystone-next/fields@5.2.2
+
 ## 1.0.2
 
 ### Patch Changes

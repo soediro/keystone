@@ -1,5 +1,14 @@
 # @keystonejs/app-admin-ui
 
+## 7.4.3
+
+### Patch Changes
+
+- [#4717](https://github.com/keystonejs/keystone/pull/4717) [`17c86e0c3`](https://github.com/keystonejs/keystone/commit/17c86e0c3eda7ba08d1bb8edf5eb8ddc9a819e5a) Thanks [@renovate](https://github.com/apps/renovate)! - Updated dependency react-select to v4
+
+- Updated dependencies [[`17c86e0c3`](https://github.com/keystonejs/keystone/commit/17c86e0c3eda7ba08d1bb8edf5eb8ddc9a819e5a)]:
+  - @keystone-next/fields-legacy@23.0.1
+
 ## 7.4.2
 
 ### Patch Changes
