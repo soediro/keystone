@@ -39,6 +39,7 @@ export function createKeystone(
   } else if (db.adapter === 'prisma_sqlite') {
     adapter = new PrismaAdapter({
       getPrismaPath: () => path.join(dotKeystonePath, 'prisma'),
+      prismaClient,
       ...db,
       provider: 'sqlite',
     });
